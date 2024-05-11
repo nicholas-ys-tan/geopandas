@@ -27,6 +27,8 @@ from geopandas.io.arrow import (
     _remove_id_from_member_of_ensembles,
     _validate_dataframe,
     _validate_metadata,
+    _check_bbox_covering_column_in_parquet,
+    _convert_bbox_to_parquet_filter,
     METADATA_VERSION,
 )
 from geopandas.testing import assert_geodataframe_equal, assert_geoseries_equal
@@ -983,3 +985,30 @@ def test_read_parquet_no_bbox(tmpdir, naturalearth_lowres):
         ValueError, match="Parquet does not have a bbox covering column."
     ):
         read_parquet(filename, bbox=(0, 0, 20, 20))
+
+
+def test_check_bbox_covering_column_in_parquet(tmpdir, naturalearth_lowres):
+    from pyarrow import parquet
+
+    df = read_file(naturalearth_lowres)
+    filename = os.path.join(str(tmpdir), "test.pq")
+    df.to_parquet(filename, write_bbox_covering=False)
+    schema = parquet.read_schema(filename)
+
+    with pytest.raises(
+        ValueError, match="Parquet does not have a bbox covering column."
+    ):
+        _check_bbox_covering_column_in_parquet(schema)
+
+
+def test_convert_bbox_to_parquet_filter():
+    import pyarrow.compute as pc
+
+    bbox = (0, 0, 25, 35)
+    expected = (
+        (pc.field(("bbox", "xmin")) > 0)
+        & (pc.field(("bbox", "ymin")) > 0)
+        & (pc.field(("bbox", "xmax")) < 25)
+        & (pc.field(("bbox", "ymax")) < 35)
+    )
+    assert expected.equals(_convert_bbox_to_parquet_filter(bbox))
