@@ -61,7 +61,7 @@ def file_format(request):
 
 
 def test_create_metadata(naturalearth_lowres):
-    df = read_file(naturalearth_lowres)
+    df = read_file(naturalearth_lowres, write_bbox_covering=True)
     metadata = _create_metadata(df)
 
     assert isinstance(metadata, dict)
@@ -77,6 +77,14 @@ def test_create_metadata(naturalearth_lowres):
         "MultiPolygon",
         "Polygon",
     ]
+    assert metadata["columns"]["geometry"]["covering"] == {
+        "bbox": {
+            "xmin": ["bbox", "xmin"],
+            "ymin": ["bbox", "ymin"],
+            "xmax": ["bbox", "xmax"],
+            "ymax": ["bbox", "ymax"],
+        }
+    }
 
     assert np.array_equal(
         metadata["columns"]["geometry"]["bbox"], df.geometry.total_bounds

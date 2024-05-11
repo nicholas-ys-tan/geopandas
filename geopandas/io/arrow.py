@@ -12,6 +12,8 @@ from geopandas.array import from_wkb
 from geopandas import GeoDataFrame
 import geopandas
 from .file import _expand_user
+from collections import OrderedDict
+
 
 METADATA_VERSION = "1.0.0"
 SUPPORTED_VERSIONS = ["0.1.0", "0.4.0", "1.0.0-beta.1", "1.0.0"]
@@ -263,7 +265,6 @@ def _geopandas_to_arrow(df, index=None, schema_version=None, write_bbox_covering
     Helper function with main, shared logic for to_parquet/to_feather.
     """
     from pyarrow import Table
-    from collections import OrderedDict
 
     if write_bbox_covering:
         geometry_bbox = df.bounds.rename(

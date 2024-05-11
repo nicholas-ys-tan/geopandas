@@ -61,6 +61,7 @@ New features and improvements:
   preservation of the original order of observations. (#3233)
 - Added `show_bbox`, `drop_id` and `to_wgs84` arguments to allow further customization of
   `GeoSeries.to_json` (#3226)
+- Added support for writing and filtered reading from bbox columns in GeoParquet (#3282)
 
 Backwards incompatible API changes:
 
