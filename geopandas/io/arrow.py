@@ -12,7 +12,6 @@ from geopandas.array import from_wkb
 from geopandas import GeoDataFrame
 import geopandas
 from .file import _expand_user
-import pyarrow.compute as pc
 
 METADATA_VERSION = "1.0.0"
 SUPPORTED_VERSIONS = ["0.1.0", "0.4.0", "1.0.0-beta.1", "1.0.0"]
@@ -739,6 +738,7 @@ def _check_bbox_covering_column_in_parquet(schema):
 
 
 def _convert_bbox_to_parquet_filter(bbox):
+    import pyarrow.compute as pc
 
     return (
         (pc.field(("bbox", "xmin")) > bbox[0])
