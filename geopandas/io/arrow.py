@@ -12,6 +12,7 @@ from geopandas.array import from_wkb
 from geopandas import GeoDataFrame
 import geopandas
 from .file import _expand_user
+import pyarrow.compute as pc
 
 METADATA_VERSION = "1.0.0"
 SUPPORTED_VERSIONS = ["0.1.0", "0.4.0", "1.0.0-beta.1", "1.0.0"]
@@ -551,7 +552,7 @@ def _ensure_arrow_fs(filesystem):
     return filesystem
 
 
-def _read_parquet(path, columns=None, storage_options=None, **kwargs):
+def _read_parquet(path, columns=None, storage_options=None, bbox=None, **kwargs):
     """
     Load a Parquet object from the file path, returning a GeoDataFrame.
 
@@ -595,6 +596,10 @@ def _read_parquet(path, columns=None, storage_options=None, **kwargs):
         both ``pyarrow.fs`` and ``fsspec`` (e.g. "s3://") then the ``pyarrow.fs``
         filesystem is preferred. Provide the instantiated fsspec filesystem using
         the ``filesystem`` keyword if you wish to use its implementation.
+    bbox: tuple, optional
+        Bounding box to be used to filter selection from geoparquet data. This
+        is only usable if the data was saved with the bbox covering metadata.
+        Input is of the tuple format (xmin, xmax, ymin, ymax).
     **kwargs
         Any additional kwargs passed to :func:`pyarrow.parquet.read_table`.
 
@@ -627,8 +632,18 @@ def _read_parquet(path, columns=None, storage_options=None, **kwargs):
     )
 
     path = _expand_user(path)
+
+    if bbox:
+        schema = parquet.read_schema(path)
+        _check_bbox_covering_column_in_parquet(schema)
+        bbox_filter = _convert_bbox_to_parquet_filter(bbox)
+    else:
+        bbox_filter = None
+
     kwargs["use_pandas_metadata"] = True
-    table = parquet.read_table(path, columns=columns, filesystem=filesystem, **kwargs)
+    table = parquet.read_table(
+        path, columns=columns, filesystem=filesystem, filters=bbox_filter, **kwargs
+    )
 
     # read metadata separately to get the raw Parquet FileMetaData metadata
     # (pyarrow doesn't properly exposes those in schema.metadata for files
@@ -715,3 +730,19 @@ def _read_feather(path, columns=None, **kwargs):
     path = _expand_user(path)
     table = feather.read_table(path, columns=columns, **kwargs)
     return _arrow_to_geopandas(table)
+
+
+def _check_bbox_covering_column_in_parquet(schema):
+    geo_metadata = json.loads(schema.metadata[b"geo"].decode())
+    if "covering" not in geo_metadata["columns"]["geometry"].keys():
+        raise ValueError("Parquet does not have a bbox covering column.")
+
+
+def _convert_bbox_to_parquet_filter(bbox):
+
+    return (
+        (pc.field(("bbox", "xmin")) > bbox[0])
+        & (pc.field(("bbox", "ymin")) > bbox[1])
+        & (pc.field(("bbox", "xmax")) < bbox[2])
+        & (pc.field(("bbox", "ymax")) < bbox[3])
+    )

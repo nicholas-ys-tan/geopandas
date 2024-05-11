@@ -958,3 +958,28 @@ def test_to_parquet_bbox_values(tmpdir, geometry, expected_bbox):
     df.to_parquet(filename, write_bbox_covering=True)
 
     assert df.bbox[0] == expected_bbox
+
+
+def test_read_parquet_bbox(tmpdir, naturalearth_lowres):
+    df = read_file(naturalearth_lowres)
+    filename = os.path.join(str(tmpdir), "test.pq")
+    df.to_parquet(filename, write_bbox_covering=True)
+
+    pq_df = read_parquet(filename, bbox=(0, 0, 20, 20))
+
+    assert pq_df["name"].values.tolist() == [
+        "Benin",
+        "Nigeria",
+        "Cameroon",
+        "Eq. Guinea",
+    ]
+
+
+def test_read_parquet_no_bbox(tmpdir, naturalearth_lowres):
+    df = read_file(naturalearth_lowres)
+    filename = os.path.join(str(tmpdir), "test.pq")
+    df.to_parquet(filename, write_bbox_covering=False)
+    with pytest.raises(
+        ValueError, match="Parquet does not have a bbox covering column."
+    ):
+        read_parquet(filename, bbox=(0, 0, 20, 20))
