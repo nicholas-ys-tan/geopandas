@@ -247,12 +247,21 @@ def _validate_metadata(metadata):
             )
 
 
-def _geopandas_to_arrow(df, index=None, schema_version=None):
+def _geopandas_to_arrow(df, index=None, schema_version=None, write_bbox_covering=False):
     """
     Helper function with main, shared logic for to_parquet/to_feather.
     """
     from pyarrow import Table
+    from collections import OrderedDict
 
+    if write_bbox_covering:
+        geometry_bbox = df.bounds.rename(
+            OrderedDict(
+                [("minx", "xmin"), ("miny", "ymin"), ("maxx", "xmax"), ("maxy", "ymax")]
+            ),
+            axis=1,
+        )
+        df["bbox"] = geometry_bbox.to_dict("records")
     _validate_dataframe(df)
 
     # create geo metadata before altering incoming data frame
@@ -279,7 +288,13 @@ def _geopandas_to_arrow(df, index=None, schema_version=None):
 
 
 def _to_parquet(
-    df, path, index=None, compression="snappy", schema_version=None, **kwargs
+    df,
+    path,
+    index=None,
+    compression="snappy",
+    schema_version=None,
+    write_bbox_covering=False,
+    **kwargs,
 ):
     """
     Write a GeoDataFrame to the Parquet format.
@@ -308,6 +323,10 @@ def _to_parquet(
     schema_version : {'0.1.0', '0.4.0', '1.0.0', None}
         GeoParquet specification version; if not provided will default to
         latest supported version.
+    write_bbox_covering : bool, default False
+        If ``True``,  write per-row bounding box to geoparquet column
+        metadata to accelerate spatial data retrieval.
+        If ``False``, the bounding box will not be written to the file.
     **kwargs
         Additional keyword arguments passed to pyarrow.parquet.write_table().
     """
@@ -327,7 +346,12 @@ def _to_parquet(
             schema_version = kwargs.pop("version")
 
     path = _expand_user(path)
-    table = _geopandas_to_arrow(df, index=index, schema_version=schema_version)
+    table = _geopandas_to_arrow(
+        df,
+        index=index,
+        schema_version=schema_version,
+        write_bbox_covering=write_bbox_covering,
+    )
     parquet.write_table(table, path, compression=compression, **kwargs)
 
 

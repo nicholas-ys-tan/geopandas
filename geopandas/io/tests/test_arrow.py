@@ -11,7 +11,7 @@ from pandas import DataFrame, read_parquet as pd_read_parquet
 from pandas.testing import assert_frame_equal
 import numpy as np
 import shapely
-from shapely.geometry import box, Point, MultiPolygon
+from shapely.geometry import box, Point, LineString, Polygon, MultiPolygon
 
 
 import geopandas
@@ -272,7 +272,12 @@ def test_to_parquet_does_not_pass_engine_along(mock_to_parquet):
     # assert that engine keyword is not passed through to _to_parquet (and thus
     # parquet.write_table)
     mock_to_parquet.assert_called_with(
-        df, "", compression="snappy", index=None, schema_version=None
+        df,
+        "",
+        compression="snappy",
+        index=None,
+        schema_version=None,
+        write_bbox_covering=False,
     )
 
 
@@ -904,3 +909,39 @@ def test_parquet_read_partitioned_dataset_fsspec(tmpdir, naturalearth_lowres):
 
     result = read_parquet("memory://partitioned_dataset")
     assert_geodataframe_equal(result, df)
+
+
+def test_to_parquet_bbox_covering_structure(tmpdir, naturalearth_lowres):
+    df = read_file(naturalearth_lowres)
+    filename = os.path.join(str(tmpdir), "test.pq")
+    df.to_parquet(filename, write_bbox_covering=True)
+    assert "bbox" in df.columns
+    assert [*df["bbox"][0].keys()] == ["xmin", "ymin", "xmax", "ymax"]
+
+
+@pytest.mark.parametrize(
+    "geometry, expected_bbox",
+    [
+        (Point(1, 3), {"xmin": 1.0, "ymin": 3.0, "xmax": 1.0, "ymax": 3.0}),
+        (
+            LineString([(1, 1), (3, 3)]),
+            {"xmin": 1.0, "ymin": 1.0, "xmax": 3.0, "ymax": 3.0},
+        ),
+        (
+            Polygon([(2, 1), (1, 2), (2, 3), (3, 2)]),
+            {"xmin": 1.0, "ymin": 1.0, "xmax": 3.0, "ymax": 3.0},
+        ),
+        (
+            MultiPolygon([box(0, 0, 1, 1), box(2, 2, 3, 3), box(4, 4, 5, 5)]),
+            {"xmin": 0.0, "ymin": 0.0, "xmax": 5.0, "ymax": 5.0},
+        ),
+    ],
+    ids=["Point geometry", "LineString geometry", "Polygon", "Multipolygon"],
+)
+def test_to_parquet_bbox_values(tmpdir, geometry, expected_bbox):
+    df = GeoDataFrame(data=[[1, 2]], columns=["a", "b"], geometry=[geometry])
+    filename = os.path.join(str(tmpdir), "test.pq")
+
+    df.to_parquet(filename, write_bbox_covering=True)
+
+    assert df.bbox[0] == expected_bbox
