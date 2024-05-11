@@ -911,12 +911,25 @@ def test_parquet_read_partitioned_dataset_fsspec(tmpdir, naturalearth_lowres):
     assert_geodataframe_equal(result, df)
 
 
-def test_to_parquet_bbox_covering_structure(tmpdir, naturalearth_lowres):
+def test_to_parquet_bbox_structure_and_metadata(tmpdir, naturalearth_lowres):
+    from pyarrow import parquet
+
     df = read_file(naturalearth_lowres)
     filename = os.path.join(str(tmpdir), "test.pq")
     df.to_parquet(filename, write_bbox_covering=True)
     assert "bbox" in df.columns
     assert [*df["bbox"][0].keys()] == ["xmin", "ymin", "xmax", "ymax"]
+
+    table = parquet.read_table(filename)
+    metadata = json.loads(table.schema.metadata[b"geo"].decode("utf-8"))
+    assert metadata["columns"]["geometry"]["covering"] == {
+        "bbox": {
+            "xmin": ["bbox", "xmin"],
+            "ymin": ["bbox", "ymin"],
+            "xmax": ["bbox", "xmax"],
+            "ymax": ["bbox", "ymax"],
+        }
+    }
 
 
 @pytest.mark.parametrize(

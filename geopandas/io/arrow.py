@@ -69,7 +69,7 @@ def _remove_id_from_member_of_ensembles(json_dict):
                 member.pop("id", None)
 
 
-def _create_metadata(df, schema_version=None):
+def _create_metadata(df, schema_version=None, write_bbox_covering=False):
     """Create and encode geo metadata dict.
 
     Parameters
@@ -78,6 +78,7 @@ def _create_metadata(df, schema_version=None):
     schema_version : {'0.1.0', '0.4.0', '1.0.0-beta.1', '1.0.0', None}
         GeoParquet specification version; if not provided will default to
         latest supported version.
+    write_bbox_covering : TODO
 
     Returns
     -------
@@ -121,6 +122,16 @@ def _create_metadata(df, schema_version=None):
         if np.isfinite(bbox).all():
             # don't add bbox with NaNs for empty / all-NA geometry column
             column_metadata[col]["bbox"] = bbox
+
+        if write_bbox_covering:
+            column_metadata[col]["covering"] = {
+                "bbox": {
+                    "xmin": ["bbox", "xmin"],
+                    "ymin": ["bbox", "ymin"],
+                    "xmax": ["bbox", "xmax"],
+                    "ymax": ["bbox", "ymax"],
+                },
+            }
 
     return {
         "primary_column": df._geometry_column_name,
@@ -265,7 +276,9 @@ def _geopandas_to_arrow(df, index=None, schema_version=None, write_bbox_covering
     _validate_dataframe(df)
 
     # create geo metadata before altering incoming data frame
-    geo_metadata = _create_metadata(df, schema_version=schema_version)
+    geo_metadata = _create_metadata(
+        df, schema_version=schema_version, write_bbox_covering=write_bbox_covering
+    )
 
     if shapely.geos_version > (3, 10, 0):
         kwargs = {"flavor": "iso"}

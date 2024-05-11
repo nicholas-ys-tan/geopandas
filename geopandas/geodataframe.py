@@ -1175,6 +1175,10 @@ properties': {'col1': 'name1'}, 'geometry': {'type': 'Point', 'coordinates': (1.
         schema_version : {'0.1.0', '0.4.0', '1.0.0', None}
             GeoParquet specification version; if not provided will default to
             latest supported version.
+        write_bbox_covering : bool, default False
+            If ``True``,  write per-row bounding box to geoparquet table
+            to accelerate spatial data retrieval.
+            If ``False``, the bounding box will not be written to the file.
         kwargs
             Additional keyword arguments passed to :func:`pyarrow.parquet.write_table`.
 
