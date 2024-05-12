@@ -555,7 +555,14 @@ def _ensure_arrow_fs(filesystem):
     return filesystem
 
 
-def _read_parquet(path, columns=None, storage_options=None, bbox=None, **kwargs):
+def _read_parquet(
+    path,
+    columns=None,
+    storage_options=None,
+    bbox=None,
+    read_bbox_column=False,
+    **kwargs,
+):
     """
     Load a Parquet object from the file path, returning a GeoDataFrame.
 
@@ -603,6 +610,13 @@ def _read_parquet(path, columns=None, storage_options=None, bbox=None, **kwargs)
         Bounding box to be used to filter selection from geoparquet data. This
         is only usable if the data was saved with the bbox covering metadata.
         Input is of the tuple format (xmin, xmax, ymin, ymax).
+    read_bbox_column: bool, optional
+        The bbox column is a struct with the minimum rectangular box that
+        encompasses the geometry. It is computationally expensive to read
+        in a struct into a GeoDataFrame. As such, it is default to not
+        read in this column unless explictly specified as True.
+        If  ``columns`` contains ``bbox``, ``bbox`` will be converted even
+        if this is False.
     **kwargs
         Any additional kwargs passed to :func:`pyarrow.parquet.read_table`.
 
@@ -626,22 +640,29 @@ def _read_parquet(path, columns=None, storage_options=None, bbox=None, **kwargs)
         "pyarrow.parquet", extra="pyarrow is required for Parquet support."
     )
     import geopandas.io._pyarrow_hotfix  # noqa: F401
+    import pyarrow.dataset as ds
 
     # TODO(https://github.com/pandas-dev/pandas/pull/41194): see if pandas
     # adds filesystem as a keyword and match that.
+
     filesystem = kwargs.pop("filesystem", None)
     filesystem, path = _get_filesystem_path(
         path, filesystem=filesystem, storage_options=storage_options
     )
 
     path = _expand_user(path)
+    schema = ds.dataset(path, filesystem=filesystem).schema
 
     if bbox:
-        schema = parquet.read_schema(path)
         _check_bbox_covering_column_in_parquet(schema)
         bbox_filter = _convert_bbox_to_parquet_filter(bbox)
     else:
         bbox_filter = None
+
+    if not read_bbox_column and not columns:
+        columns = schema.names
+        if "bbox" in columns:
+            columns.remove("bbox")
 
     kwargs["use_pandas_metadata"] = True
     table = parquet.read_table(
