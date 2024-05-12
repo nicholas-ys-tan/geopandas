@@ -641,7 +641,10 @@ def _read_parquet(
         "pyarrow.parquet", extra="pyarrow is required for Parquet support."
     )
     import geopandas.io._pyarrow_hotfix  # noqa: F401
-    import pyarrow.dataset as ds
+
+    ds = import_optional_dependency(
+        "pyarrow.dataset", extra="pyarrow is required for Parquet support."
+    )
 
     # TODO(https://github.com/pandas-dev/pandas/pull/41194): see if pandas
     # adds filesystem as a keyword and match that.
