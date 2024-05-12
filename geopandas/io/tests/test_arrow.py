@@ -962,6 +962,9 @@ def test_to_parquet_bbox_values(tmpdir, geometry, expected_bbox):
     assert df.bbox[0] == expected_bbox
 
 
+@pytest.mark.skipif(
+    Version(pyarrow.__version__) < Version("9.0.0"), reason="needs pyarrow >= 9.0.0"
+)
 def test_read_parquet_bbox_single_point(tmpdir):
     df = GeoDataFrame(data=[[1, 2]], columns=["a", "b"], geometry=[Point(1, 1)])
     filename = os.path.join(str(tmpdir), "test.pq")
@@ -972,6 +975,9 @@ def test_read_parquet_bbox_single_point(tmpdir):
     assert pq_df.geometry[0] == Point(1, 1)
 
 
+@pytest.mark.skipif(
+    Version(pyarrow.__version__) < Version("9.0.0"), reason="needs pyarrow >= 9.0.0"
+)
 def test_read_parquet_bbox(tmpdir, naturalearth_lowres):
     df = read_file(naturalearth_lowres)
     filename = os.path.join(str(tmpdir), "test.pq")
@@ -1011,6 +1017,9 @@ def test_check_bbox_covering_column_in_parquet(tmpdir, naturalearth_lowres):
         _check_bbox_covering_column_in_parquet(schema)
 
 
+@pytest.mark.skipif(
+    Version(pyarrow.__version__) < Version("9.0.0"), reason="needs pyarrow >= 9.0.0"
+)
 def test_convert_bbox_to_parquet_filter():
     import pyarrow.compute as pc
 

@@ -743,6 +743,12 @@ def _check_bbox_covering_column_in_parquet(schema):
 
 def _convert_bbox_to_parquet_filter(bbox):
     import pyarrow.compute as pc
+    import pyarrow
+
+    if Version(pyarrow.__version__) < Version("9.0.0"):
+        raise ImportError(
+            "pyarrow >= 9.0.0 required to allow boolean expression to filter by bbox."
+        )
 
     return (
         (pc.field(("bbox", "xmin")) >= bbox[0])
