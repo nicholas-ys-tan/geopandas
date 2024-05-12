@@ -997,6 +997,9 @@ def test_read_parquet_bbox(tmpdir, naturalearth_lowres):
     ]
 
 
+@pytest.mark.skipif(
+    Version(pyarrow.__version__) < Version("9.0.0"), reason="needs pyarrow >= 9.0.0"
+)
 def test_read_parquet_bbox_partitioned(tmpdir, naturalearth_lowres):
     # check bbox is being used to filter results on partioned data.
     df = read_file(naturalearth_lowres)

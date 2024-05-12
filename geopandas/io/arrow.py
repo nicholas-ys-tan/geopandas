@@ -610,13 +610,14 @@ def _read_parquet(
         Bounding box to be used to filter selection from geoparquet data. This
         is only usable if the data was saved with the bbox covering metadata.
         Input is of the tuple format (xmin, xmax, ymin, ymax).
-    read_bbox_column: bool, optional
+    read_bbox_column: bool, default False
         The bbox column is a struct with the minimum rectangular box that
         encompasses the geometry. It is computationally expensive to read
         in a struct into a GeoDataFrame. As such, it is default to not
         read in this column unless explictly specified as True.
-        If  ``columns`` contains ``bbox``, ``bbox`` will be converted even
-        if this is False.
+        If  ``columns`` arguement is used and contains ``bbox``,
+        this will override ``read_bbox_column`` and include ``bbox``
+        even if this is False.
     **kwargs
         Any additional kwargs passed to :func:`pyarrow.parquet.read_table`.
 
