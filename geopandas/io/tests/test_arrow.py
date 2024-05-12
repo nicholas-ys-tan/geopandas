@@ -999,7 +999,22 @@ def test_read_parquet_bbox(tmpdir, naturalearth_lowres):
 
 def test_read_parquet_bbox_partitioned(tmpdir, naturalearth_lowres):
     # check bbox is being used to filter results on partioned data.
-    pass
+    df = read_file(naturalearth_lowres)
+
+    # manually create partitioned dataset
+    basedir = tmpdir / "partitioned_dataset"
+    basedir.mkdir()
+    df[:100].to_parquet(basedir / "data1.parquet", write_bbox_covering=True)
+    df[100:].to_parquet(basedir / "data2.parquet", write_bbox_covering=True)
+
+    pq_df = read_parquet(basedir, bbox=(0, 0, 20, 20))
+
+    assert pq_df["name"].values.tolist() == [
+        "Benin",
+        "Nigeria",
+        "Cameroon",
+        "Eq. Guinea",
+    ]
 
 
 def test_read_parquet_no_bbox(tmpdir, naturalearth_lowres):
@@ -1017,7 +1032,18 @@ def test_read_parquet_no_bbox(tmpdir, naturalearth_lowres):
 def test_read_parquet_no_bbox_partitioned(tmpdir, naturalearth_lowres):
     # check error message when partitioned parquet data does not have
     # a bbox column but want to use kwarg to read_parquet.
-    pass
+    df = read_file(naturalearth_lowres)
+
+    # manually create partitioned dataset
+    basedir = tmpdir / "partitioned_dataset"
+    basedir.mkdir()
+    df[:100].to_parquet(basedir / "data1.parquet")
+    df[100:].to_parquet(basedir / "data2.parquet")
+
+    with pytest.raises(
+        ValueError, match="Parquet does not have a bbox covering column."
+    ):
+        read_parquet(basedir, bbox=(0, 0, 20, 20))
 
 
 def test_check_bbox_covering_column_in_parquet(tmpdir, naturalearth_lowres):
@@ -1052,17 +1078,34 @@ def test_convert_bbox_to_parquet_filter():
     assert expected.equals(_convert_bbox_to_parquet_filter(bbox))
 
 
-# def test_read_parquet_default_bbox_column_behaviour(tmpdir, naturalearth_lowres):
-#     # check that bbox column is not read in by default
-#     from pyarrow import parquet
+def test_read_parquet_bbox_column_default_behaviour(tmpdir, naturalearth_lowres):
+    # check that bbox column is not read in by default
 
-#     df = read_file(naturalearth_lowres)
-#     filename = os.path.join(str(tmpdir), "test.pq")
-#     df.to_parquet(filename, write_bbox_covering=True)
-#     schema = parquet.read_schema(filename)
-#     pq_df = read_parquet(filename)
+    df = read_file(naturalearth_lowres)
+    filename = os.path.join(str(tmpdir), "test.pq")
+    df.to_parquet(filename, write_bbox_covering=True)
+    pq_df_default = read_parquet(filename)
+    assert "bbox" not in pq_df_default
+
+    pq_df_bbox = read_parquet(filename, read_bbox_column=True)
+    assert "bbox" in pq_df_bbox
 
 
-def test_read_parquet_bbox_column(tmpdir, naturalearth_lowres):
-    # check that bbox column is read in when selected
-    pass
+def test_read_parquet_colums_and_bbox(tmpdir, naturalearth_lowres):
+    # confirm columns list over-rides read_bbox_column argument.
+    # if column list includes 'bbox' and read_bbox_column=False -> include 'bbox'
+    # if column list excludes 'bbox' and read_bbox_column=True -> exclude 'bbox'
+    from pyarrow import parquet
+
+    df = read_file(naturalearth_lowres)
+    filename = os.path.join(str(tmpdir), "test.pq")
+    df.to_parquet(filename, write_bbox_covering=True)
+    schema = parquet.read_schema(filename)
+    columns = schema.names
+
+    pq_df1 = read_parquet(filename, columns=columns, read_bbox_column=False)
+    assert "bbox" in pq_df1
+
+    columns.remove("bbox")
+    pq_df2 = read_parquet(filename, columns=columns, read_bbox_column=True)
+    assert "bbox" not in pq_df2
