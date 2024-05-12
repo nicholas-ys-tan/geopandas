@@ -745,8 +745,8 @@ def _convert_bbox_to_parquet_filter(bbox):
     import pyarrow.compute as pc
 
     return (
-        (pc.field(("bbox", "xmin")) > bbox[0])
-        & (pc.field(("bbox", "ymin")) > bbox[1])
-        & (pc.field(("bbox", "xmax")) < bbox[2])
-        & (pc.field(("bbox", "ymax")) < bbox[3])
+        (pc.field(("bbox", "xmin")) >= bbox[0])
+        & (pc.field(("bbox", "ymin")) >= bbox[1])
+        & (pc.field(("bbox", "xmax")) <= bbox[2])
+        & (pc.field(("bbox", "ymax")) <= bbox[3])
     )

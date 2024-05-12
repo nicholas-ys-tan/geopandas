@@ -962,6 +962,16 @@ def test_to_parquet_bbox_values(tmpdir, geometry, expected_bbox):
     assert df.bbox[0] == expected_bbox
 
 
+def test_read_parquet_bbox_single_point(tmpdir):
+    df = GeoDataFrame(data=[[1, 2]], columns=["a", "b"], geometry=[Point(1, 1)])
+    filename = os.path.join(str(tmpdir), "test.pq")
+    df.to_parquet(filename, write_bbox_covering=True)
+
+    pq_df = read_parquet(filename, bbox=(1, 1, 1, 1))
+    assert len(pq_df) == 1
+    assert pq_df.geometry[0] == Point(1, 1)
+
+
 def test_read_parquet_bbox(tmpdir, naturalearth_lowres):
     df = read_file(naturalearth_lowres)
     filename = os.path.join(str(tmpdir), "test.pq")
@@ -1006,9 +1016,9 @@ def test_convert_bbox_to_parquet_filter():
 
     bbox = (0, 0, 25, 35)
     expected = (
-        (pc.field(("bbox", "xmin")) > 0)
-        & (pc.field(("bbox", "ymin")) > 0)
-        & (pc.field(("bbox", "xmax")) < 25)
-        & (pc.field(("bbox", "ymax")) < 35)
+        (pc.field(("bbox", "xmin")) >= 0)
+        & (pc.field(("bbox", "ymin")) >= 0)
+        & (pc.field(("bbox", "xmax")) <= 25)
+        & (pc.field(("bbox", "ymax")) <= 35)
     )
     assert expected.equals(_convert_bbox_to_parquet_filter(bbox))
