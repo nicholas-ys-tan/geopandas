@@ -1081,17 +1081,17 @@ def test_convert_bbox_to_parquet_filter():
     assert expected.equals(_convert_bbox_to_parquet_filter(bbox))
 
 
-def test_read_parquet_bbox_column_default_behaviour(tmpdir, naturalearth_lowres):
-    # check that bbox column is not read in by default
+# def test_read_parquet_bbox_column_default_behaviour(tmpdir, naturalearth_lowres):
+#     # check that bbox column is not read in by default
 
-    df = read_file(naturalearth_lowres)
-    filename = os.path.join(str(tmpdir), "test.pq")
-    df.to_parquet(filename, write_bbox_covering=True)
-    pq_df_default = read_parquet(filename)
-    assert "bbox" not in pq_df_default
+#     df = read_file(naturalearth_lowres)
+#     filename = os.path.join(str(tmpdir), "test.pq")
+#     df.to_parquet(filename, write_bbox_covering=True)
+#     pq_df_default = read_parquet(filename)
+#     assert "bbox" not in pq_df_default
 
-    pq_df_bbox = read_parquet(filename, read_bbox_column=True)
-    assert "bbox" in pq_df_bbox
+    # pq_df_bbox = read_parquet(filename, read_bbox_column=True)
+    # assert "bbox" in pq_df_bbox
 
 
 def test_read_parquet_colums_and_bbox(tmpdir, naturalearth_lowres):

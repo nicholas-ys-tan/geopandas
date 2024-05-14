@@ -642,10 +642,6 @@ def _read_parquet(
     )
     import geopandas.io._pyarrow_hotfix  # noqa: F401
 
-    ds = import_optional_dependency(
-        "pyarrow.dataset", extra="pyarrow is required for Parquet support."
-    )
-
     # TODO(https://github.com/pandas-dev/pandas/pull/41194): see if pandas
     # adds filesystem as a keyword and match that.
 
@@ -655,40 +651,37 @@ def _read_parquet(
     )
 
     path = _expand_user(path)
-    schema = ds.dataset(path, filesystem=filesystem).schema
+    schema, metadata = _get_table_schema_and_metadata(path, filesystem)
+    try:
+        metadata = _decode_metadata(metadata.get(b"geo", b""))
+
+    except (TypeError, json.decoder.JSONDecodeError):
+        raise ValueError("Missing or malformed geo metadata in Parquet/Feather file")
+
+    _validate_metadata(metadata)
+
+    if_bbox_in_parquet = _check_bbox_covering_column_in_parquet(metadata)
 
     if bbox:
-        _check_bbox_covering_column_in_parquet(schema)
-        bbox_filter = _convert_bbox_to_parquet_filter(bbox)
+        if not if_bbox_in_parquet:
+            raise ValueError()
+        bbox_column_name = _get_bbox_encoding_column_name(metadata)
+        bbox_filter = _convert_bbox_to_parquet_filter(bbox, bbox_column_name)
     else:
         bbox_filter = None
 
-    if not read_bbox_column and not columns:
+    if not read_bbox_column and not columns and if_bbox_in_parquet:
+        bbox_column_name = _get_bbox_encoding_column_name(metadata)
         columns = schema.names
-        if "bbox" in columns:
-            columns.remove("bbox")
+        if bbox_column_name in columns:
+            columns.remove(bbox_column_name)
 
     kwargs["use_pandas_metadata"] = True
     table = parquet.read_table(
         path, columns=columns, filesystem=filesystem, filters=bbox_filter, **kwargs
     )
 
-    # read metadata separately to get the raw Parquet FileMetaData metadata
-    # (pyarrow doesn't properly exposes those in schema.metadata for files
-    # created by GDAL - https://issues.apache.org/jira/browse/ARROW-16688)
-    metadata = None
-    if table.schema.metadata is None or b"geo" not in table.schema.metadata:
-        try:
-            # read_metadata does not accept a filesystem keyword, so need to
-            # handle this manually (https://issues.apache.org/jira/browse/ARROW-16719)
-            if filesystem is not None:
-                pa_filesystem = _ensure_arrow_fs(filesystem)
-                with pa_filesystem.open_input_file(path) as source:
-                    metadata = parquet.read_metadata(source).metadata
-            else:
-                metadata = parquet.read_metadata(path).metadata
-        except Exception:
-            pass
+    metadata = None if metadata == table.schema.metadata else metadata
 
     return _arrow_to_geopandas(table, metadata)
 
@@ -760,13 +753,16 @@ def _read_feather(path, columns=None, **kwargs):
     return _arrow_to_geopandas(table)
 
 
-def _check_bbox_covering_column_in_parquet(schema):
-    geo_metadata = json.loads(schema.metadata[b"geo"].decode())
-    if "covering" not in geo_metadata["columns"]["geometry"].keys():
-        raise ValueError("Parquet does not have a bbox covering column.")
+def _check_bbox_covering_column_in_parquet(metadata):
+    geo_metadata = json.loads(metadata[b"geo"].decode())
+    return "covering" in geo_metadata["columns"]["geometry"].keys()
+
+def _get_bbox_encoding_column_name(metadata):
+    geo_metadata = json.loads(metadata[b"geo"].decode())
+    return geo_metadata['columns']['geometry']['covering']['bbox']['xmin'][0]
 
 
-def _convert_bbox_to_parquet_filter(bbox):
+def _convert_bbox_to_parquet_filter(bbox, bbox_column_name):
     import pyarrow.compute as pc
     import pyarrow
 
@@ -776,8 +772,37 @@ def _convert_bbox_to_parquet_filter(bbox):
         )
 
     return (
-        (pc.field(("bbox", "xmin")) >= bbox[0])
-        & (pc.field(("bbox", "ymin")) >= bbox[1])
-        & (pc.field(("bbox", "xmax")) <= bbox[2])
-        & (pc.field(("bbox", "ymax")) <= bbox[3])
+        (pc.field((bbox_column_name, "xmin")) >= bbox[0])
+        & (pc.field((bbox_column_name, "ymin")) >= bbox[1])
+        & (pc.field((bbox_column_name, "xmax")) <= bbox[2])
+        & (pc.field((bbox_column_name, "ymax")) <= bbox[3])
     )
+
+def _get_table_schema_and_metadata(path, filesystem):
+    ds = import_optional_dependency(
+        "pyarrow.dataset", extra="pyarrow is required for Parquet support."
+    )
+    schema = ds.dataset(path, filesystem=filesystem).schema
+    metadata = schema.metadata
+    # read metadata separately to get the raw Parquet FileMetaData metadata
+    # (pyarrow doesn't properly exposes those in schema.metadata for files
+    # created by GDAL - https://issues.apache.org/jira/browse/ARROW-16688)
+    if metadata is None or b"geo" not in metadata:
+        try:
+            # read_metadata does not accept a filesystem keyword, so need to
+            # handle this manually (https://issues.apache.org/jira/browse/ARROW-16719)
+            if filesystem is not None:
+                pa_filesystem = _ensure_arrow_fs(filesystem)
+                with pa_filesystem.open_input_file(path) as source:
+                    metadata = parquet.read_metadata(source).metadata
+            else:
+                metadata = parquet.read_metadata(path).metadata
+        except:
+            raise ValueError(
+            """Missing geo metadata in Parquet/Feather file.
+            Use pandas.read_parquet/read_feather() instead."""
+        )
+    # import pdb; pdb.set_trace()
+    return schema, metadata
+
+
